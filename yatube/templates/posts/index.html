@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Последние обновления на сайте{% endblock %}
+{% block content %}
+  <main>
+    <div class="container py-5">
+      <h1>Последние обновления на сайте.</h1>
+      <h6>Всего {{ count }} записей.</h6>
+      <hr>
+      {% for post in page_obj %}
+        {% include 'posts/includes/posts_form.html' with all_posts_flag='True' %}
+      {% endfor %}
+      {% include 'posts/includes/paginator.html' %}
+    </div>
+  </main>
+{% endblock %}
