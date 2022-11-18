@@ -7,7 +7,7 @@ from django import forms
 User = get_user_model()
 
 
-class TestPack(TestCase):
+class PostTest(TestCase):
     @classmethod
     def setUpClass(cls):
         """Создается 14 постов одной группы и одного автора,
