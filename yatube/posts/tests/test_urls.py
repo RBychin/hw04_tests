@@ -2,6 +2,7 @@ from http import HTTPStatus
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from ..models import Group, Post
+from django.urls import reverse
 
 User = get_user_model()
 
@@ -12,6 +13,9 @@ class TaskURLTests(TestCase):
         super().setUpClass()
         cls.user = User.objects.create_user(
             username='Roman'
+        )
+        cls.another_user = User.objects.create_user(
+            username='Not_Roman'
         )
         cls.group = Group.objects.create(
             title='Тестовая группа',
@@ -27,6 +31,8 @@ class TaskURLTests(TestCase):
         self.guest_client = Client()
         self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
+        self.authorized_another_client = Client()
+        self.authorized_another_client.force_login(self.another_user)
 
     def test_main_and_group_status(self):
         """Тест проверки доступа: posts:index, posts:group_list"""
@@ -45,21 +51,47 @@ class TaskURLTests(TestCase):
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_private_url(self):
-        """Тест проверки доступа: posts:create_post, admin"""
+        """Тест проверки доступа: posts:create_post, admin гостевым клиентом"""
         urls = (
             '/create/',
             '/admin/',
         )
-        for address in urls:
+        for url in urls:
             with self.subTest():
-                response = self.guest_client.get(address)
+                response = self.guest_client.get(url)
                 self.assertEqual(response.status_code, HTTPStatus.FOUND)
+
+    def test_redirects(self):
+        """Тест проверки редиректов posts:create_post, post_edit, admin
+        гостевым клиентом."""
+        self.assertRedirects(
+            self.guest_client.get(
+                reverse('posts:post_create')),
+            '/auth/login/?next=/create/'
+        )
+        self.assertRedirects(
+            self.guest_client.get(
+                '/admin/'),
+            '/admin/login/?next=/admin/'
+        )
+        self.assertRedirects(
+            self.guest_client.get(
+                reverse('posts:post_edit',
+                        kwargs={'post_id': self.post.pk})),
+            f'/auth/login/?next=/posts/{self.post.pk}/edit/'
+        )
+        self.assertRedirects(
+            self.authorized_another_client.get(
+                reverse('posts:post_edit',
+                        kwargs={'post_id': self.post.pk})),
+            f'/posts/{str(self.post.pk)}/'
+        )
 
     def test_urls_templates(self):
         """Тест соответствия шаблонов URL-ам."""
         templates_urls = {
             'posts/index.html': '/',
-            'posts/group_list.html': '/group/test_slug/',
+            'posts/group_list.html': f'/group/{self.group.slug}/',
             'posts/create_post.html': '/create/',
         }
         for template, address in templates_urls.items():

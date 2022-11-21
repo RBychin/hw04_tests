@@ -22,7 +22,7 @@ class FormTest(TestCase):
             slug='test_slug',
             description='Тестовое описание'
         )
-        Post.objects.create(
+        cls.post = Post.objects.create(
             text='Ля ля ля',
             group=cls.group,
             author=cls.user
@@ -34,8 +34,7 @@ class FormTest(TestCase):
         self.authorize_client.force_login(self.user)
 
     def test_post_form(self):
-        """Проверка добавление поста через с валидной формой."""
-        post_count = Post.objects.count()
+        """Проверка добавление поста с валидной формой."""
         form_data = {
             'text': 'Созданный пост',
             'group': self.group.pk
@@ -48,22 +47,31 @@ class FormTest(TestCase):
             response, reverse('posts:profile',
                               kwargs={'username': self.user.username})
         )
-        self.assertEqual(Post.objects.count(), post_count + 1)
+        self.assertEqual(Post.objects.first().author, self.user)
+        self.assertEqual(Post.objects.first().group.pk, self.group.pk)
         self.assertEqual(Post.objects.first().text, 'Созданный пост')
+        #  хотел сделать это через getattr(), словарь и subTest(),
+        #  но с group.pk не получилось, а с attrgetter очень громоздко.
 
     def test_post_edit_form(self):
         """Проверка работы изменения поста с валидной формой."""
         response = self.authorize_client.post(
             reverse('posts:post_edit', kwargs={
-                'post_id': '1'
+                'post_id': self.post.pk
             }),
             data={'text': 'Измененный пост'}
         )
         self.assertRedirects(
             response, reverse('posts:post_detail',
-                              kwargs={'post_id': '1'})
+                              kwargs={'post_id': self.post.pk})
         )
         self.assertEqual(Post.objects.first().text, 'Измененный пост')
+        self.assertEqual(Post.objects.first().author, self.user)
+        #  У меня к сожалению так и не получилось получить здесь group_id,
+        #  Я не понимаю и не нашел информации о том, нюансы это джанго или
+        #  это все же я рукожоп :)
+        #  Без явной передачи group.pk в форму редактирования, после
+        #  редактирования я получаю поле group == None у этого поста.
 
     def test_post_create_not_valid_form(self):
         """Проверка работы добавления поста с невалидной формой."""
@@ -85,48 +93,3 @@ class FormTest(TestCase):
         )
         self.assertFormError(response, 'form', 'text', 'Обязательное поле.')
         self.assertEqual(response.status_code, HTTPStatus.OK, 'Сервер упал')
-
-    def test_new_user_create_valid_form(self):
-        """Создание нового пользователя с валидной формой
-        и работа редиректа."""
-        users_count = User.objects.count()
-        form_data = {
-            'username': 'new_user',
-            'password1': '5Rk1f2zQ',
-            'password2': '5Rk1f2zQ'
-        }
-        response = self.guest_client.post(
-            reverse('users:signup'),
-            data=form_data
-        )
-        self.assertEqual(User.objects.count(), users_count + 1,
-                         'Не удается создать нового пользователя')
-        self.assertEqual(
-            User.objects.get(username='new_user'
-                             ).username, 'new_user')
-        self.assertRedirects(
-            response, reverse('posts:index')
-        )
-
-    def test_new_user_create_not_valid_form(self):
-        """Создание нового пользователя с НЕ валидной формой
-                и работа редиректа."""
-        #  Вроде этот валидатор проверять не нужно (он встроенный,
-        #  но в доп задании была такая задача).
-        users_count = User.objects.count()
-        form_data = {
-            'username': 'new_user',
-            'password1': 'qwerty12',
-            'password2': 'qwerty12'
-        }
-        response = self.guest_client.post(
-            reverse('users:signup'),
-            data=form_data
-        )
-        self.assertEqual(User.objects.count(), users_count,
-                         'Проверьте работу валидаторов.')
-        self.assertFormError(
-            response, 'form', 'password2',
-            'Введённый пароль слишком широко распространён.'
-        )
-        self.assertEqual(response.status_code, HTTPStatus.OK, 'Сервер упал.')
