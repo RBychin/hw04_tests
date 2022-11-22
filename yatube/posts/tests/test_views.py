@@ -28,8 +28,8 @@ class PostTest(TestCase):
             User(username='test_user'),
             User(username='roman')
         ])
-        uncount_group = Group.objects.get(slug='test_slug_2')
-        uncount_author = User.objects.get(username='test_user')
+        cls.another_group = Group.objects.get(slug='test_slug_2')
+        cls.another_author = User.objects.get(username='test_user')
         cls.group = Group.objects.get(slug='test_slug')
         cls.user = User.objects.get(username='roman')
         Post.objects.bulk_create([
@@ -38,10 +38,11 @@ class PostTest(TestCase):
                  author=cls.user,
                  pk=1),
             Post(text='Неиспользуемый тестовый пост.',
-                 group=uncount_group,
-                 author=uncount_author)
+                 group=cls.another_group,
+                 author=cls.another_author)
         ])
         cls.post = Post.objects.get(pk=1)
+        cls.another_post = Post.objects.get(pk=2)
         Post.objects.bulk_create([
             Post(text=f'Пост для паджинатора {i}',
                  group=cls.group,
@@ -94,14 +95,18 @@ class PostTest(TestCase):
         Страницы группы, Страницы профиля."""
         addresses = (
             reverse('posts:group_list', kwargs={'slug': self.group.slug}),
-            reverse('posts:profile', kwargs={'username': self.user.username})
+            reverse('posts:profile', kwargs={'username': self.user.username}),
+            reverse('posts:index')
         )
         for address in addresses:
-            response = self.authorize_client.get(
-                address + f'?page={self.post.pk}'
+            response = self.guest_client.get(
+                address + '?page=2'
             )
             with self.subTest(address=address):
-                self.assertEqual(len(response.context['page_obj']), 10)
+                self.assertEqual(
+                    len(response.context['page_obj']),
+                    5 if address == reverse('posts:index') else 4
+                )
 
     def test_context(self):
         """Тест контекста главной страницы."""
@@ -138,6 +143,29 @@ class PostTest(TestCase):
         for field, value in form_fields.items():
             with self.subTest(field=field):
                 self.assertIsInstance(form.fields[field], value)
+
+    def test_post_added_correct(self):
+        """Проверка: добавленный пост не попадает к в другую группу/к другому
+        автору"""
+        post_count = Post.objects.filter(group=self.another_group).count()
+        post = Post.objects.create(
+            text='Еще один пост в другой гурппе с другим автором',
+            group=self.another_group,
+            author=self.another_author
+        )
+        response = self.guest_client.get(
+            reverse(
+                'posts:group_list', kwargs={'slug': self.group.slug}
+            )
+        )
+        self.assertEqual(
+            Post.objects.filter(group=self.another_group).count(),
+            post_count + 1
+        )
+        self.assertNotIn(
+            post, response.context['page_obj'],
+            f'Пост "{post.text}", должен находиться в группе '
+            f'{self.another_group}, а находится в {self.group}')
 
     def test_context_is_edit_post(self):
         """Тест проверки передачи аргумента is_edit в post_edit"""

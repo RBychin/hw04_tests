@@ -47,11 +47,13 @@ class FormTest(TestCase):
             response, reverse('posts:profile',
                               kwargs={'username': self.user.username})
         )
-        self.assertEqual(Post.objects.first().author, self.user)
-        self.assertEqual(Post.objects.first().group.pk, self.group.pk)
-        self.assertEqual(Post.objects.first().text, 'Созданный пост')
-        #  хотел сделать это через getattr(), словарь и subTest(),
-        #  но с group.pk не получилось, а с attrgetter очень громоздко.
+        self.assertTrue(
+            Post.objects.filter(
+                author=self.user,
+                text='Созданный пост',
+                group=self.group,
+            ).exists()
+        )
 
     def test_post_edit_form(self):
         """Проверка работы изменения поста с валидной формой."""
@@ -59,19 +61,20 @@ class FormTest(TestCase):
             reverse('posts:post_edit', kwargs={
                 'post_id': self.post.pk
             }),
-            data={'text': 'Измененный пост'}
+            data={'text': 'Измененный пост',
+                  'group': self.group.pk}
         )
         self.assertRedirects(
             response, reverse('posts:post_detail',
                               kwargs={'post_id': self.post.pk})
         )
-        self.assertEqual(Post.objects.first().text, 'Измененный пост')
-        self.assertEqual(Post.objects.first().author, self.user)
-        #  У меня к сожалению так и не получилось получить здесь group_id,
-        #  Я не понимаю и не нашел информации о том, нюансы это джанго или
-        #  это все же я рукожоп :)
-        #  Без явной передачи group.pk в форму редактирования, после
-        #  редактирования я получаю поле group == None у этого поста.
+        self.assertTrue(
+            Post.objects.filter(
+                author=self.user,
+                text='Измененный пост',
+                group=self.group,
+            ).exists()
+        )
 
     def test_post_create_not_valid_form(self):
         """Проверка работы добавления поста с невалидной формой."""
@@ -88,7 +91,7 @@ class FormTest(TestCase):
     def test_post_edit_not_valid_form(self):
         """Проверка работы изменения поста с невалидной формой."""
         response = self.authorize_client.post(
-            reverse('posts:post_edit', kwargs={'post_id': '1'}),
+            reverse('posts:post_edit', kwargs={'post_id': self.post.pk}),
             data={'title': ' '}
         )
         self.assertFormError(response, 'form', 'text', 'Обязательное поле.')

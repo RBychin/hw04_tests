@@ -61,25 +61,23 @@ class TaskURLTests(TestCase):
                 response = self.guest_client.get(url)
                 self.assertEqual(response.status_code, HTTPStatus.FOUND)
 
-    def test_redirects(self):
-        """Тест проверки редиректов posts:create_post, post_edit, admin
-        гостевым клиентом."""
-        self.assertRedirects(
-            self.guest_client.get(
-                reverse('posts:post_create')),
-            '/auth/login/?next=/create/'
-        )
-        self.assertRedirects(
-            self.guest_client.get(
-                '/admin/'),
-            '/admin/login/?next=/admin/'
-        )
-        self.assertRedirects(
-            self.guest_client.get(
+    def test_redirects_guest(self):
+        """Тест проверки редиректов posts:create_post, post_edit для
+        гостевого клиента."""
+        expected_data = {
+            '/auth/login/?next=/create/': reverse('posts:post_create'),
+            f'/auth/login/?next=/posts/{self.post.pk}/edit/':
                 reverse('posts:post_edit',
-                        kwargs={'post_id': self.post.pk})),
-            f'/auth/login/?next=/posts/{self.post.pk}/edit/'
-        )
+                        kwargs={'post_id': self.post.pk})
+        }
+        for redirect, url in expected_data.items():
+            with self.subTest(redirect=redirect):
+                response = self.guest_client.get(url)
+                self.assertRedirects(response, redirect)
+
+    def test_redirect_authorizate(self):
+        """Тест проверки редиректа posts:post_edit для авторизованного
+        клиента."""
         self.assertRedirects(
             self.authorized_another_client.get(
                 reverse('posts:post_edit',
